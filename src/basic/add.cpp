@@ -21,6 +21,11 @@ int cmd_add(const std::vector<std::string>& args) {
             continue;
         }
 
+        if (repo.isIgnored(fullPath)) {
+            out.warn(arg + " matches .vcsignore, skipping");
+            continue;
+        }
+
         if (FileSystem::isDirectory(fullPath)) {
             std::vector<TreeEntry> entries;
             repo.objects();
@@ -30,7 +35,7 @@ int cmd_add(const std::vector<std::string>& args) {
                     for (auto& item : items) {
                         auto fp = dir + "/" + item;
                         auto rp = prefix.empty() ? item : prefix + "/" + item;
-                        if (fp.find("/.vcs") != std::string::npos) continue;
+                        if (repo.isIgnored(fp)) continue;
                         if (FileSystem::isRegularFile(fp)) {
                             auto content = FileSystem::readFile(fp);
                             auto hash = repo.objects().storeBlob(content);

@@ -39,6 +39,8 @@ int cmd_config(const std::map<std::string, std::string>& options,
                const std::vector<std::string>& args);
 int cmd_revert(const std::map<std::string, std::string>& options,
                const std::vector<std::string>& args);
+int cmd_gc(const std::map<std::string, std::string>& options,
+           const std::vector<std::string>& args);
 
 } // namespace vcs
 
@@ -81,6 +83,8 @@ int main(int argc, char* argv[]) {
             return vcs::cmd_config(cl.options, cl.args);
         } else if (cl.command == "revert") {
             return vcs::cmd_revert(cl.options, cl.args);
+        } else if (cl.command == "gc") {
+            return vcs::cmd_gc(cl.options, cl.args);
         } else if (cl.command == "help" || cl.command == "--help" || cl.command == "-h") {
             if (!cl.args.empty()) vcs::Parser::printHelp(cl.args[0]);
             else vcs::Parser::printUsage();

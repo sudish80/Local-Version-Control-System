@@ -72,6 +72,7 @@ inline std::string Parser::getHelpString(const std::string& command) {
     if (command == "clean")    return "  clean      Remove untracked files";
     if (command == "config")   return "  config     Read/write configuration values";
     if (command == "revert")   return "  revert     Revert a commit by applying inverse diff";
+    if (command == "gc")       return "  gc         Garbage collect unreachable objects";
     return "";
 }
 
@@ -95,6 +96,7 @@ inline void Parser::printUsage() {
     std::cout << getHelpString("clean") << "\n";
     std::cout << getHelpString("config") << "\n";
     std::cout << getHelpString("revert") << "\n";
+    std::cout << getHelpString("gc") << "\n";
 }
 
 inline void Parser::printHelp(const std::string& command) {
@@ -177,6 +179,10 @@ inline void Parser::printHelp(const std::string& command) {
         std::cout << "vcs revert - Revert a commit by applying inverse diff\n\n";
         std::cout << "Usage: vcs revert <commit>\n\n";
         std::cout << "Restores files to their state before the given commit.\n";
+    } else if (command == "gc") {
+        std::cout << "vcs gc - Garbage collect unreachable objects\n\n";
+        std::cout << "Usage: vcs gc\n\n";
+        std::cout << "Removes objects not reachable from any branch, tag, or stash.\n";
     } else {
         printUsage();
     }
