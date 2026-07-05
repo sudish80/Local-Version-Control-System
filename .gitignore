@@ -1,0 +1,4 @@
+.vcs/
+vcs.exe
+*.o
+obj/
