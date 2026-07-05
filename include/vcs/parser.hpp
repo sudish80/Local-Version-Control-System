@@ -73,6 +73,7 @@ inline std::string Parser::getHelpString(const std::string& command) {
     if (command == "config")   return "  config     Read/write configuration values";
     if (command == "revert")   return "  revert     Revert a commit by applying inverse diff";
     if (command == "gc")       return "  gc         Garbage collect unreachable objects";
+    if (command == "blame")    return "  blame      Show commit attribution for each line of a file";
     return "";
 }
 
@@ -97,6 +98,7 @@ inline void Parser::printUsage() {
     std::cout << getHelpString("config") << "\n";
     std::cout << getHelpString("revert") << "\n";
     std::cout << getHelpString("gc") << "\n";
+    std::cout << getHelpString("blame") << "\n";
 }
 
 inline void Parser::printHelp(const std::string& command) {
@@ -183,6 +185,10 @@ inline void Parser::printHelp(const std::string& command) {
         std::cout << "vcs gc - Garbage collect unreachable objects\n\n";
         std::cout << "Usage: vcs gc\n\n";
         std::cout << "Removes objects not reachable from any branch, tag, or stash.\n";
+    } else if (command == "blame") {
+        std::cout << "vcs blame - Show commit attribution for each line of a file\n\n";
+        std::cout << "Usage: vcs blame <file>\n\n";
+        std::cout << "Annotates each line with the commit hash that last modified it.\n";
     } else {
         printUsage();
     }
