@@ -51,6 +51,23 @@ int cmd_rebase(const std::map<std::string, std::string>& options,
                const std::vector<std::string>& args);
 int cmd_bisect(const std::map<std::string, std::string>& options,
                const std::vector<std::string>& args);
+int cmd_fsck(const std::map<std::string, std::string>& options,
+             const std::vector<std::string>& args);
+int cmd_archive(const std::map<std::string, std::string>& options,
+                const std::vector<std::string>& args);
+int cmd_format_patch(const std::map<std::string, std::string>& options,
+                     const std::vector<std::string>& args);
+int cmd_am(const std::map<std::string, std::string>& options,
+           const std::vector<std::string>& args);
+int cmd_remote(const std::map<std::string, std::string>& options,
+               const std::vector<std::string>& args);
+int cmd_clone(const std::vector<std::string>& args);
+int cmd_fetch(const std::map<std::string, std::string>& options,
+              const std::vector<std::string>& args);
+int cmd_push(const std::map<std::string, std::string>& options,
+             const std::vector<std::string>& args);
+int cmd_pull(const std::map<std::string, std::string>& options,
+             const std::vector<std::string>& args);
 
 } // namespace vcs
 
@@ -105,6 +122,24 @@ int main(int argc, char* argv[]) {
             return vcs::cmd_rebase(cl.options, cl.args);
         } else if (cl.command == "bisect") {
             return vcs::cmd_bisect(cl.options, cl.args);
+        } else if (cl.command == "fsck") {
+            return vcs::cmd_fsck(cl.options, cl.args);
+        } else if (cl.command == "archive") {
+            return vcs::cmd_archive(cl.options, cl.args);
+        } else if (cl.command == "format-patch") {
+            return vcs::cmd_format_patch(cl.options, cl.args);
+        } else if (cl.command == "am") {
+            return vcs::cmd_am(cl.options, cl.args);
+        } else if (cl.command == "remote") {
+            return vcs::cmd_remote(cl.options, cl.args);
+        } else if (cl.command == "clone") {
+            return vcs::cmd_clone(cl.args);
+        } else if (cl.command == "fetch") {
+            return vcs::cmd_fetch(cl.options, cl.args);
+        } else if (cl.command == "push") {
+            return vcs::cmd_push(cl.options, cl.args);
+        } else if (cl.command == "pull") {
+            return vcs::cmd_pull(cl.options, cl.args);
         } else if (cl.command == "help" || cl.command == "--help" || cl.command == "-h") {
             if (!cl.args.empty()) vcs::Parser::printHelp(cl.args[0]);
             else vcs::Parser::printUsage();

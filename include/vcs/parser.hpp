@@ -78,6 +78,15 @@ inline std::string Parser::getHelpString(const std::string& command) {
     if (command == "cherry-pick") return "  cherry-pick Apply changes from an existing commit";
     if (command == "rebase")   return "  rebase     Reapply commits on top of another branch";
     if (command == "bisect")   return "  bisect     Binary search for a breaking commit";
+    if (command == "fsck")     return "  fsck       Check object database integrity";
+    if (command == "archive")  return "  archive    Create archive from a commit";
+    if (command == "format-patch") return "  format-patch Generate patch files from commits";
+    if (command == "am")       return "  am         Apply a patch file";
+    if (command == "remote")   return "  remote     Manage remotes";
+    if (command == "clone")    return "  clone      Clone a repository";
+    if (command == "fetch")    return "  fetch      Fetch from a remote";
+    if (command == "push")     return "  push       Push to a remote";
+    if (command == "pull")     return "  pull       Pull from a remote";
     return "";
 }
 
@@ -107,6 +116,15 @@ inline void Parser::printUsage() {
     std::cout << getHelpString("cherry-pick") << "\n";
     std::cout << getHelpString("rebase") << "\n";
     std::cout << getHelpString("bisect") << "\n";
+    std::cout << getHelpString("fsck") << "\n";
+    std::cout << getHelpString("archive") << "\n";
+    std::cout << getHelpString("format-patch") << "\n";
+    std::cout << getHelpString("am") << "\n";
+    std::cout << getHelpString("remote") << "\n";
+    std::cout << getHelpString("clone") << "\n";
+    std::cout << getHelpString("fetch") << "\n";
+    std::cout << getHelpString("push") << "\n";
+    std::cout << getHelpString("pull") << "\n";
 }
 
 inline void Parser::printHelp(const std::string& command) {
@@ -218,6 +236,44 @@ inline void Parser::printHelp(const std::string& command) {
         std::cout << "       vcs bisect bad\n";
         std::cout << "       vcs bisect reset\n\n";
         std::cout << "Marks commits and narrows down the first bad commit.\n";
+    } else if (command == "fsck") {
+        std::cout << "vcs fsck - Check object database integrity\n\n";
+        std::cout << "Usage: vcs fsck\n\n";
+        std::cout << "Verifies all objects and reports errors/dangling objects.\n";
+    } else if (command == "archive") {
+        std::cout << "vcs archive - Create archive from a commit\n\n";
+        std::cout << "Usage: vcs archive <commit> [-o <file.zip>]\n\n";
+        std::cout << "Creates a ZIP archive of files from the given commit.\n";
+    } else if (command == "format-patch") {
+        std::cout << "vcs format-patch - Generate patch files from commits\n\n";
+        std::cout << "Usage: vcs format-patch <commit>...\n\n";
+        std::cout << "Creates .patch files for each commit.\n";
+    } else if (command == "am") {
+        std::cout << "vcs am - Apply a patch file\n\n";
+        std::cout << "Usage: vcs am <patch-file>\n\n";
+        std::cout << "Applies a patch and creates a new commit.\n";
+    } else if (command == "remote") {
+        std::cout << "vcs remote - Manage remotes\n\n";
+        std::cout << "Usage: vcs remote\n";
+        std::cout << "       vcs remote add <name> <url>\n";
+        std::cout << "       vcs remote remove <name>\n\n";
+        std::cout << "Manages remote repository URLs (file-based).\n";
+    } else if (command == "clone") {
+        std::cout << "vcs clone - Clone a repository\n\n";
+        std::cout << "Usage: vcs clone <url> [<dir>]\n\n";
+        std::cout << "Copies .vcs and checks out HEAD.\n";
+    } else if (command == "fetch") {
+        std::cout << "vcs fetch - Fetch from a remote\n\n";
+        std::cout << "Usage: vcs fetch [<remote>]\n\n";
+        std::cout << "Downloads objects and refs from remote.\n";
+    } else if (command == "push") {
+        std::cout << "vcs push - Push to a remote\n\n";
+        std::cout << "Usage: vcs push [<remote>]\n\n";
+        std::cout << "Uploads objects and updates remote refs.\n";
+    } else if (command == "pull") {
+        std::cout << "vcs pull - Pull from a remote\n\n";
+        std::cout << "Usage: vcs pull [<remote>]\n\n";
+        std::cout << "Fetches and merges remote branch into current.\n";
     } else {
         printUsage();
     }

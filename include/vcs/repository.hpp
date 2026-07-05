@@ -19,6 +19,8 @@
 #include <ctime>
 #include <regex>
 #include <fstream>
+#include <functional>
+#include <cstring>
 
 namespace vcs {
 
@@ -109,6 +111,19 @@ public:
     bool cherryPick(const std::string& commitHash);
     bool rebase(const std::string& targetBranch);
     std::vector<std::string> getParentChain(const std::string& startHash) const;
+
+    int fsck();
+    bool archive(const std::string& commitHash, const std::string& outputFile);
+    std::string formatPatch(const std::string& commitHash);
+    bool am(const std::string& patchFile, const std::string& author = "");
+
+    bool remoteAdd(const std::string& name, const std::string& url);
+    std::string remoteUrl(const std::string& name) const;
+    std::vector<std::string> remoteList() const;
+    bool clone(const std::string& url, const std::string& dir);
+    bool fetch(const std::string& remote);
+    bool push(const std::string& remote);
+    bool pull(const std::string& remote);
 
     bool isIgnored(const std::string& path) const;
 
@@ -789,6 +804,446 @@ inline bool Repository::rebase(const std::string& targetBranch) {
         if (!cherryPick(c)) return false;
     }
 
+    return true;
+}
+
+inline int Repository::fsck() {
+    Output out;
+    int checked = 0, errors = 0, dangling = 0;
+    std::set<std::string> reachable;
+
+    auto addReachable = [&](const std::string& hash, auto& self) -> void {
+        if (hash.size() != 40 || reachable.count(hash)) return;
+        reachable.insert(hash);
+        try {
+            auto obj = odb_->read(hash);
+            if (obj.type == ObjectType::Commit) {
+                std::string d(obj.content.begin(), obj.content.end());
+                std::istringstream iss(d);
+                std::string line;
+                while (std::getline(iss, line)) {
+                    if (line.substr(0, 5) == "tree ") { reachable.insert(line.substr(5)); self(line.substr(5), self); }
+                    else if (line.substr(0, 7) == "parent ") self(line.substr(7), self);
+                }
+            } else if (obj.type == ObjectType::Tree) {
+                for (auto& e : odb_->parseTree(hash)) { reachable.insert(e.hash); }
+            }
+        } catch (...) {}
+    };
+
+    addReachable(refs_->resolveHead(), addReachable);
+    if (!getStashHash().empty()) addReachable(getStashHash(), addReachable);
+    for (auto& b : refs_->listBranches()) {
+        auto h = refs_->getBranchRef(b);
+        if (!h.empty()) addReachable(h, addReachable);
+    }
+    for (auto& t : refs_->listTags()) {
+        auto h = refs_->getTagRef(t);
+        if (!h.empty()) addReachable(h, addReachable);
+    }
+
+    auto objectsDir = vcsDir_ + "/objects";
+    for (auto& dir : FileSystem::listDirectory(objectsDir)) {
+        auto dirPath = objectsDir + "/" + dir;
+        if (!FileSystem::isDirectory(dirPath)) continue;
+        for (auto& file : FileSystem::listDirectory(dirPath)) {
+            auto hash = dir + file;
+            ++checked;
+            try {
+                auto path = dirPath + "/" + file;
+                auto compressed = FileSystem::readFile(path);
+                auto raw = Compression::decompress(compressed);
+                auto obj = Object::deserialize(raw);
+                auto computedHash = obj.computeHash();
+                if (computedHash != hash) {
+                    out.error("Hash mismatch: " + hash + " vs " + computedHash);
+                    ++errors;
+                }
+                if (reachable.find(hash) == reachable.end()) {
+                    ++dangling;
+                }
+            } catch (std::exception& e) {
+                out.error("Corrupt object " + hash + ": " + e.what());
+                ++errors;
+            }
+        }
+    }
+
+    out.info("Checked " + std::to_string(checked) + " objects");
+    if (errors) out.error(std::to_string(errors) + " error(s) found");
+    else out.success("No errors found");
+    if (dangling) out.warn(std::to_string(dangling) + " dangling object(s)");
+    return errors;
+}
+
+inline bool Repository::archive(const std::string& commitHash, const std::string& outputFile) {
+    try {
+        auto obj = odb_->read(commitHash);
+        if (obj.type != ObjectType::Commit) return false;
+        std::string d(obj.content.begin(), obj.content.end());
+        std::istringstream iss(d);
+        std::string line, treeHash;
+        while (std::getline(iss, line))
+            if (line.substr(0, 5) == "tree ") { treeHash = line.substr(5); break; }
+        if (treeHash.empty()) return false;
+
+        std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+        std::function<void(const std::string&, const std::string&)> walk =
+            [&](const std::string& th, const std::string& prefix) {
+                for (auto& e : odb_->parseTree(th)) {
+                    auto fullName = prefix.empty() ? e.name : prefix + "/" + e.name;
+                    try {
+                        auto blob = odb_->read(e.hash);
+                        if (blob.type == ObjectType::Tree) walk(e.hash, fullName);
+                        else files.push_back({fullName, blob.content});
+                    } catch (...) {}
+                }
+            };
+        walk(treeHash, "");
+
+        std::ofstream out(outputFile, std::ios::binary);
+        if (!out) return false;
+
+        auto writeLE16 = [&](uint16_t v) { out.put(v & 0xFF); out.put((v >> 8) & 0xFF); };
+        auto writeLE32 = [&](uint32_t v) {
+            out.put(v & 0xFF); out.put((v >> 8) & 0xFF);
+            out.put((v >> 16) & 0xFF); out.put((v >> 24) & 0xFF);
+        };
+
+        auto dosTime = [](time_t t) -> uint16_t {
+            struct tm* tm = localtime(&t);
+            if (!tm) return 0;
+            return (tm->tm_sec / 2) | (tm->tm_min << 5) | (tm->tm_hour << 11);
+        };
+        auto dosDate = [](time_t t) -> uint16_t {
+            struct tm* tm = localtime(&t);
+            if (!tm) return 0;
+            return tm->tm_mday | ((tm->tm_mon + 1) << 5) | ((tm->tm_year - 80) << 9);
+        };
+
+        std::vector<size_t> offsets;
+        time_t now = std::time(nullptr);
+        for (auto& [name, content] : files) {
+            offsets.push_back(static_cast<size_t>(out.tellp()));
+            auto crc = Compression::crc32(content);
+            auto compressed = Compression::deflate(content);
+
+            // Local file header
+            out.write("PK\x03\x04", 4);
+            writeLE16(20); // version needed
+            writeLE16(0);  // flags
+            writeLE16(8);  // deflate
+            writeLE16(dosTime(now));
+            writeLE16(dosDate(now));
+            writeLE32(crc);
+            writeLE32(static_cast<uint32_t>(compressed.size()));
+            writeLE32(static_cast<uint32_t>(content.size()));
+            writeLE16(static_cast<uint16_t>(name.size()));
+            writeLE16(0);  // extra
+            out.write(name.data(), name.size());
+            out.write(reinterpret_cast<const char*>(compressed.data()), compressed.size());
+        }
+
+        size_t centralOffset = static_cast<size_t>(out.tellp());
+        uint16_t entryCount = static_cast<uint16_t>(files.size());
+        for (size_t i = 0; i < files.size(); ++i) {
+            auto& [name, content] = files[i];
+            auto crc = Compression::crc32(content);
+            auto compressed = Compression::deflate(content);
+
+            out.write("PK\x01\x02", 4);
+            writeLE16(20); writeLE16(20); writeLE16(0);
+            writeLE16(8);  writeLE16(dosTime(now));
+            writeLE16(dosDate(now)); writeLE32(crc);
+            writeLE32(static_cast<uint32_t>(compressed.size()));
+            writeLE32(static_cast<uint32_t>(content.size()));
+            writeLE16(static_cast<uint16_t>(name.size()));
+            writeLE16(0); writeLE16(0); writeLE16(0);
+            writeLE16(0); writeLE32(0);
+            writeLE32(static_cast<uint32_t>(offsets[i]));
+            out.write(name.data(), name.size());
+        }
+
+        // End of central directory
+        out.write("PK\x05\x06", 4);
+        writeLE16(0); writeLE16(0);
+        writeLE16(entryCount); writeLE16(entryCount);
+        writeLE32(static_cast<uint32_t>(static_cast<size_t>(out.tellp()) - centralOffset));
+        writeLE32(static_cast<uint32_t>(centralOffset));
+        writeLE16(0);
+
+        return true;
+    } catch (...) { return false; }
+}
+
+inline std::string Repository::formatPatch(const std::string& commitHash) {
+    try {
+        auto obj = odb_->read(commitHash);
+        if (obj.type != ObjectType::Commit) return "";
+        std::string data(obj.content.begin(), obj.content.end());
+        std::istringstream iss(data);
+        std::string line, treeHash, parentHash, author, message;
+        while (std::getline(iss, line)) {
+            if (line.substr(0, 5) == "tree ") treeHash = line.substr(5);
+            else if (line.substr(0, 7) == "parent ") parentHash = line.substr(7);
+            else if (line.substr(0, 7) == "author ") author = line.substr(7);
+            else if (line.empty()) { std::getline(iss, message, '\0'); break; }
+        }
+        if (treeHash.empty()) return "";
+
+        std::map<std::string, std::string> commitFiles, parentFiles;
+        for (auto& e : odb_->parseTree(treeHash)) commitFiles[e.name] = e.hash;
+        if (!parentHash.empty()) {
+            try {
+                auto pObj = odb_->read(parentHash);
+                std::string pd(pObj.content.begin(), pObj.content.end());
+                std::istringstream pIss(pd);
+                std::string pl, pt;
+                while (std::getline(pIss, pl))
+                    if (pl.substr(0, 5) == "tree ") { pt = pl.substr(5); break; }
+                if (!pt.empty()) for (auto& e : odb_->parseTree(pt)) parentFiles[e.name] = e.hash;
+            } catch (...) {}
+        }
+
+        std::ostringstream patch;
+        patch << "From " << commitHash << " Mon Sep 17 00:00:00 2001\n";
+        patch << "From: " << author << "\n";
+        patch << "Date: " << std::time(nullptr) << "\n";
+        patch << "Subject: " << message << "\n\n";
+
+        std::set<std::string> allFiles;
+        for (auto& [k, _] : commitFiles) allFiles.insert(k);
+        for (auto& [k, _] : parentFiles) allFiles.insert(k);
+
+        for (auto& f : allFiles) {
+            auto cf = commitFiles.find(f);
+            auto pf = parentFiles.find(f);
+            auto curHash = (cf != commitFiles.end()) ? cf->second : "";
+            auto oldHash = (pf != parentFiles.end()) ? pf->second : "";
+
+            if (curHash == oldHash) continue;
+
+            std::string oldContent, newContent;
+            if (!oldHash.empty()) oldContent.assign(odb_->read(oldHash).content.begin(), odb_->read(oldHash).content.end());
+            if (!curHash.empty()) newContent.assign(odb_->read(curHash).content.begin(), odb_->read(curHash).content.end());
+
+            patch << "diff --git a/" << f << " b/" << f << "\n";
+            patch << "--- a/" << f << "\n" << "+++ b/" << f << "\n";
+
+            auto diffs = DiffEngine::diffLines(oldContent, newContent);
+            for (auto& d : diffs) {
+                switch (d.type) {
+                    case DiffLine::CONTEXT:  patch << " " << d.content; break;
+                    case DiffLine::ADDITION: patch << "+" << d.content; break;
+                    case DiffLine::DELETION:  patch << "-" << d.content; break;
+                }
+            }
+        }
+
+        return patch.str();
+    } catch (...) { return ""; }
+}
+
+inline bool Repository::am(const std::string& patchFile, const std::string& author) {
+    if (!FileSystem::exists(patchFile)) return false;
+    auto content = FileSystem::readTextFile(patchFile);
+    std::istringstream iss(content);
+    std::string line, subject, from;
+    bool inBody = false;
+    std::vector<std::string> diffSections;
+    std::string currentDiff;
+    bool inDiff = false;
+
+    while (std::getline(iss, line)) {
+        if (line.substr(0, 7) == "Subject") { subject = line.substr(8); }
+        else if (line.substr(0, 5) == "From ") { /* skip mail header */ }
+        else if (line.substr(0, 6) == "From: ") { from = line.substr(6); }
+        else if (line.substr(0, 10) == "diff --git") {
+            if (!currentDiff.empty()) diffSections.push_back(currentDiff);
+            currentDiff = line + "\n";
+            inDiff = true;
+        } else if (inDiff) {
+            currentDiff += line + "\n";
+        }
+    }
+    if (!currentDiff.empty()) diffSections.push_back(currentDiff);
+
+    index_->load();
+    for (auto& sec : diffSections) {
+        std::istringstream sIss(sec);
+        std::string dl, oldFile, newFile, oldName;
+        std::vector<std::string> oldLines, newLines;
+        bool parsingOld = false, parsingNew = false;
+
+        while (std::getline(sIss, dl)) {
+            if (dl.substr(0, 10) == "diff --git") {
+                auto space = dl.find_last_of(' ');
+                if (space != std::string::npos) newFile = dl.substr(space + 1);
+                continue;
+            }
+            if (dl.substr(0, 4) == "--- ") { oldFile = dl.substr(6); continue; }
+            if (dl.substr(0, 4) == "+++ ") { newFile = dl.substr(6); continue; }
+            if (dl.empty() || dl[0] == ' ') { parsingOld = true; parsingNew = true; continue; }
+            if (dl[0] == '-') oldLines.push_back(dl.substr(1));
+            else if (dl[0] == '+') newLines.push_back(dl.substr(1));
+            else if (dl[0] == ' ') { oldLines.push_back(dl.substr(1)); newLines.push_back(dl.substr(1)); }
+        }
+
+        auto filePath = newFile;
+        auto fullPath = workDir_ + "/" + filePath;
+        auto dir = fs::path(fullPath).parent_path().string();
+        if (!FileSystem::exists(dir)) FileSystem::createDirectories(dir);
+
+        std::ostringstream fout;
+        for (auto& l : newLines) fout << l << "\n";
+        auto fileContent = fout.str();
+        if (!fileContent.empty() && fileContent.back() == '\n') fileContent.pop_back();
+
+        auto blobHash = odb_->storeBlob(std::vector<uint8_t>(fileContent.begin(), fileContent.end()));
+        FileSystem::writeFile(fullPath, std::vector<uint8_t>(fileContent.begin(), fileContent.end()));
+        auto mtime = FileSystem::getLastModifiedTime(fullPath);
+        auto size = FileSystem::getFileSize(fullPath);
+        index_->stage(filePath, blobHash, mtime, size);
+    }
+    index_->save();
+
+    std::vector<TreeEntry> treeEntries;
+    for (auto& e : index_->getAllFiles()) {
+        TreeEntry te;
+        te.mode = "100644";
+        te.name = e.path;
+        te.hash = e.hash;
+        treeEntries.push_back(te);
+    }
+    auto treeHash = odb_->storeTree(treeEntries);
+    auto headHash = refs_->resolveHead();
+    auto commitAuthor = author.empty() ? "Author <author@vcs.local>" : author;
+    auto newCommit = odb_->storeCommit(treeHash, headHash, commitAuthor, subject);
+    auto branch = refs_->getCurrentBranch();
+    if (!branch.empty()) refs_->setBranchRef(branch, newCommit);
+    else refs_->setHead(newCommit);
+
+    return true;
+}
+
+inline bool Repository::remoteAdd(const std::string& name, const std::string& url) {
+    auto remotesDir = vcsDir_ + "/remotes";
+    FileSystem::createDirectories(remotesDir);
+    return FileSystem::writeTextFile(remotesDir + "/" + name, url);
+}
+
+inline std::string Repository::remoteUrl(const std::string& name) const {
+    auto path = vcsDir_ + "/remotes/" + name;
+    if (!FileSystem::exists(path)) return "";
+    return FileSystem::readTextFile(path);
+}
+
+inline std::vector<std::string> Repository::remoteList() const {
+    auto remotesDir = vcsDir_ + "/remotes";
+    if (!FileSystem::exists(remotesDir)) return {};
+    return FileSystem::listFiles(remotesDir);
+}
+
+inline bool Repository::clone(const std::string& url, const std::string& dir) {
+    fs::path target(dir);
+    if (FileSystem::exists(target.string())) return false;
+    auto srcVcs = fs::path(url) / VCS_DIR;
+    if (!FileSystem::exists(srcVcs.string())) return false;
+
+    init();
+    auto dstVcs = vcsDir_;
+
+    auto copyDir = [&](const fs::path& src, const fs::path& dst, auto& self) -> void {
+        if (!FileSystem::exists(dst.string())) FileSystem::createDirectories(dst.string());
+        for (auto& e : fs::directory_iterator(src)) {
+            auto target = dst / e.path().filename();
+            if (e.is_directory()) self(e.path(), target, self);
+            else fs::copy_file(e.path(), target, fs::copy_options::overwrite_existing);
+        }
+    };
+    copyDir(srcVcs, fs::path(dstVcs), copyDir);
+
+    refs_->setCurrentBranch(refs_->getCurrentBranch());
+
+    auto headHash = refs_->resolveHead();
+    if (!headHash.empty()) reset(headHash, "hard");
+    return true;
+}
+
+inline bool Repository::fetch(const std::string& remote) {
+    auto url = remoteUrl(remote);
+    if (url.empty()) return false;
+    auto remoteDir = fs::path(url) / VCS_DIR;
+    if (!FileSystem::exists(remoteDir.string())) return false;
+
+    auto copyDir = [&](const fs::path& src, const fs::path& dst, auto& self) -> void {
+        if (!FileSystem::exists(dst.string())) FileSystem::createDirectories(dst.string());
+        for (auto& e : fs::directory_iterator(src)) {
+            auto target = dst / e.path().filename();
+            if (e.is_directory()) self(e.path(), target, self);
+            else if (!fs::exists(target)) fs::copy_file(e.path(), target);
+        }
+    };
+    copyDir(remoteDir / "objects", fs::path(vcsDir_) / "objects", copyDir);
+
+    auto refsDir = remoteDir / "refs";
+    if (FileSystem::exists(refsDir.string())) {
+        copyDir(refsDir / "heads", fs::path(vcsDir_) / "refs" / "remotes" / remote, copyDir);
+    }
+
+    return true;
+}
+
+inline bool Repository::push(const std::string& remote) {
+    auto url = remoteUrl(remote);
+    if (url.empty()) return false;
+    auto remoteDir = fs::path(url) / VCS_DIR;
+    if (!FileSystem::exists(remoteDir.string())) return false;
+
+    auto copyDir = [&](const fs::path& src, const fs::path& dst, auto& self) -> void {
+        if (!FileSystem::exists(dst.string())) FileSystem::createDirectories(dst.string());
+        for (auto& e : fs::directory_iterator(src)) {
+            auto target = dst / e.path().filename();
+            if (e.is_directory()) self(e.path(), target, self);
+            else if (!fs::exists(target)) fs::copy_file(e.path(), target);
+        }
+    };
+    copyDir(fs::path(vcsDir_) / "objects", remoteDir / "objects", copyDir);
+
+    for (auto& b : refs_->listBranches()) {
+        auto hash = refs_->getBranchRef(b);
+        if (!hash.empty()) FileSystem::writeTextFile((remoteDir / "refs/heads" / b).string(), hash);
+    }
+    for (auto& t : refs_->listTags()) {
+        auto hash = refs_->getTagRef(t);
+        if (!hash.empty()) FileSystem::writeTextFile((remoteDir / "refs/tags" / t).string(), hash);
+    }
+
+    return true;
+}
+
+inline bool Repository::pull(const std::string& remote) {
+    if (!fetch(remote)) return false;
+    auto remoteBranchPath = fs::path(vcsDir_) / "refs" / "remotes" / remote / refs_->getCurrentBranch();
+    if (!FileSystem::exists(remoteBranchPath.string())) return false;
+    auto remoteHash = FileSystem::readTextFile(remoteBranchPath.string());
+    if (remoteHash.empty()) return false;
+
+    auto headHash = refs_->resolveHead();
+    if (headHash.empty()) {
+        reset(remoteHash, "hard");
+        return true;
+    }
+
+    MergeEngine me(*odb_, *index_, workDir_);
+    auto result = me.merge(headHash, remoteHash, refs_->getCurrentBranch(), remote + "/" + refs_->getCurrentBranch());
+    if (!result.success) return false;
+
+    auto branch = refs_->getCurrentBranch();
+    if (!branch.empty()) {
+        auto mergeCommit = odb_->storeCommit(result.mergeHash, headHash, "Merge <merge@vcs.local>", "Merge " + remote + "/" + branch);
+        refs_->setBranchRef(branch, mergeCommit);
+    }
     return true;
 }
 
