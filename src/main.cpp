@@ -43,6 +43,14 @@ int cmd_gc(const std::map<std::string, std::string>& options,
            const std::vector<std::string>& args);
 int cmd_blame(const std::map<std::string, std::string>& options,
               const std::vector<std::string>& args);
+int cmd_reset(const std::map<std::string, std::string>& options,
+              const std::vector<std::string>& args);
+int cmd_cherry_pick(const std::map<std::string, std::string>& options,
+                    const std::vector<std::string>& args);
+int cmd_rebase(const std::map<std::string, std::string>& options,
+               const std::vector<std::string>& args);
+int cmd_bisect(const std::map<std::string, std::string>& options,
+               const std::vector<std::string>& args);
 
 } // namespace vcs
 
@@ -89,6 +97,14 @@ int main(int argc, char* argv[]) {
             return vcs::cmd_gc(cl.options, cl.args);
         } else if (cl.command == "blame") {
             return vcs::cmd_blame(cl.options, cl.args);
+        } else if (cl.command == "reset") {
+            return vcs::cmd_reset(cl.options, cl.args);
+        } else if (cl.command == "cherry-pick") {
+            return vcs::cmd_cherry_pick(cl.options, cl.args);
+        } else if (cl.command == "rebase") {
+            return vcs::cmd_rebase(cl.options, cl.args);
+        } else if (cl.command == "bisect") {
+            return vcs::cmd_bisect(cl.options, cl.args);
         } else if (cl.command == "help" || cl.command == "--help" || cl.command == "-h") {
             if (!cl.args.empty()) vcs::Parser::printHelp(cl.args[0]);
             else vcs::Parser::printUsage();

@@ -105,6 +105,10 @@ public:
     std::string getStashHash() const;
     bool setStashHash(const std::string& hash) const;
     int gc();
+    bool reset(const std::string& targetHash, const std::string& mode);
+    bool cherryPick(const std::string& commitHash);
+    bool rebase(const std::string& targetBranch);
+    std::vector<std::string> getParentChain(const std::string& startHash) const;
 
     bool isIgnored(const std::string& path) const;
 
@@ -191,6 +195,28 @@ inline bool Repository::isIgnored(const std::string& path) const {
 
 inline std::string Repository::getFileMode(const std::string& path) const {
     return "100644";
+}
+
+inline std::vector<std::string> Repository::getParentChain(const std::string& startHash) const {
+    std::vector<std::string> result;
+    std::string current = startHash;
+    while (!current.empty()) {
+        result.push_back(current);
+        try {
+            auto obj = odb_->read(current);
+            if (obj.type != ObjectType::Commit) break;
+            std::string data(obj.content.begin(), obj.content.end());
+            std::istringstream iss(data);
+            std::string line, parent;
+            bool found = false;
+            while (std::getline(iss, line)) {
+                if (line.substr(0, 7) == "parent ") { parent = line.substr(7); found = true; break; }
+            }
+            if (!found) break;
+            current = parent;
+        } catch (...) { break; }
+    }
+    return result;
 }
 
 inline std::vector<std::string> Repository::getUntrackedFiles() const {
@@ -532,6 +558,238 @@ inline int Repository::gc() {
     }
 
     return removed;
+}
+
+static std::map<std::string, std::string> getTreeFileMap(ObjectDatabase& odb, const std::string& commitHash) {
+    std::map<std::string, std::string> files;
+    if (commitHash.empty()) return files;
+    try {
+        auto obj = odb.read(commitHash);
+        if (obj.type != ObjectType::Commit) return files;
+        std::string data(obj.content.begin(), obj.content.end());
+        std::istringstream iss(data);
+        std::string line, treeHash;
+        while (std::getline(iss, line))
+            if (line.substr(0, 5) == "tree ") { treeHash = line.substr(5); break; }
+        if (!treeHash.empty()) {
+            for (auto& e : odb.parseTree(treeHash)) files[e.name] = e.hash;
+        }
+    } catch (...) {}
+    return files;
+}
+
+inline bool Repository::cherryPick(const std::string& commitHash) {
+    try {
+        auto commitObj = odb_->read(commitHash);
+        if (commitObj.type != ObjectType::Commit) return false;
+
+        std::string data(commitObj.content.begin(), commitObj.content.end());
+        std::istringstream iss(data);
+        std::string line, treeHash, parentHash, message;
+        while (std::getline(iss, line)) {
+            if (line.substr(0, 5) == "tree ") treeHash = line.substr(5);
+            else if (line.substr(0, 7) == "parent ") parentHash = line.substr(7);
+            else if (line.empty()) { std::getline(iss, message, '\0'); break; }
+        }
+        if (treeHash.empty()) return false;
+
+        auto headHash = refs_->resolveHead();
+
+        auto commitFiles = getTreeFileMap(*odb_, commitHash);
+        auto parentFiles = getTreeFileMap(*odb_, parentHash);
+        auto headFiles = getTreeFileMap(*odb_, headHash);
+
+        index_->load();
+
+        std::set<std::string> allFiles;
+        for (auto& [k, _] : commitFiles) allFiles.insert(k);
+        for (auto& [k, _] : parentFiles) allFiles.insert(k);
+        for (auto& [k, _] : headFiles) allFiles.insert(k);
+
+        bool conflict = false;
+
+        for (auto& f : allFiles) {
+            auto cf = commitFiles.find(f);
+            auto pf = parentFiles.find(f);
+            auto hf = headFiles.find(f);
+            auto curHash = (cf != commitFiles.end()) ? cf->second : "";
+            auto ancHash = (pf != parentFiles.end()) ? pf->second : "";
+            auto ourHash = (hf != headFiles.end()) ? hf->second : "";
+
+            if (curHash == ourHash) continue;
+            if (curHash == ancHash) continue;
+
+            auto fullPath = workDir_ + "/" + f;
+
+            if (ancHash == ourHash || ancHash.empty()) {
+                if (curHash.empty()) {
+                    if (FileSystem::exists(fullPath)) FileSystem::remove(fullPath);
+                    index_->unstage(f);
+                } else {
+                    auto obj = odb_->read(curHash);
+                    FileSystem::writeFile(fullPath, obj.content);
+                    auto mtime = FileSystem::getLastModifiedTime(fullPath);
+                    auto size = FileSystem::getFileSize(fullPath);
+                    index_->stage(f, curHash, mtime, size);
+                }
+            } else {
+                std::string ancStr, ourStr, curStr;
+                if (!ancHash.empty()) {
+                    auto ancObj2 = odb_->read(ancHash);
+                    ancStr = std::string(ancObj2.content.begin(), ancObj2.content.end());
+                }
+                if (!ourHash.empty()) {
+                    auto ourObj2 = odb_->read(ourHash);
+                    ourStr = std::string(ourObj2.content.begin(), ourObj2.content.end());
+                }
+                if (!curHash.empty()) {
+                    auto curObj2 = odb_->read(curHash);
+                    curStr = std::string(curObj2.content.begin(), curObj2.content.end());
+                }
+
+                std::ofstream fout(fullPath);
+                if (fout) {
+                    fout << "<<<<<<< HEAD (current)\n";
+                    fout << ourStr;
+                    if (!ourStr.empty() && ourStr.back() != '\n') fout << '\n';
+                    fout << "=======\n";
+                    fout << curStr;
+                    if (!curStr.empty() && curStr.back() != '\n') fout << '\n';
+                    fout << ">>>>>>> cherry-pick (" << Reference::hashToShort(commitHash) << ")\n";
+                }
+                conflict = true;
+                std::cerr << "\033[31mConflict: " << f << "\033[0m\n";
+            }
+        }
+
+        index_->save();
+
+        if (conflict) {
+            std::cerr << "\033[33mCherry-pick caused conflicts. Resolve them, then 'vcs add' and 'vcs commit'.\033[0m\n";
+            return false;
+        }
+
+        auto newTreeHash = [&]() {
+            std::vector<TreeEntry> entries;
+            for (auto& e : index_->getAllFiles()) {
+                TreeEntry te;
+                te.mode = "100644";
+                te.name = e.path;
+                te.hash = e.hash;
+                entries.push_back(te);
+            }
+            return odb_->storeTree(entries);
+        }();
+
+        std::string author = "Author <author@vcs.local>";
+        auto newCommit = odb_->storeCommit(newTreeHash, headHash, author, message);
+
+        auto branch = refs_->getCurrentBranch();
+        if (!branch.empty()) refs_->setBranchRef(branch, newCommit);
+        else refs_->setHead(newCommit);
+
+        return true;
+    } catch (std::exception& e) {
+        std::cerr << "\033[31mCherry-pick exception: " << e.what() << "\033[0m\n";
+        return false;
+    } catch (...) {
+        std::cerr << "\033[31mCherry-pick unknown exception\033[0m\n";
+        return false;
+    }
+}
+
+inline bool Repository::reset(const std::string& targetHash, const std::string& mode) {
+    try {
+        auto commitObj = odb_->read(targetHash);
+        if (commitObj.type != ObjectType::Commit) return false;
+
+        std::string data(commitObj.content.begin(), commitObj.content.end());
+        std::istringstream iss(data);
+        std::string line, treeHash;
+        while (std::getline(iss, line))
+            if (line.substr(0, 5) == "tree ") { treeHash = line.substr(5); break; }
+
+        if (treeHash.empty()) return false;
+
+        auto treeEntries = odb_->parseTree(treeHash);
+
+        index_->load();
+
+        if (mode == "soft") {
+        } else if (mode == "mixed") {
+            index_->clear();
+            for (auto& e : treeEntries) {
+                uint64_t mtime = 0, size = 0;
+                auto fullPath = workDir_ + "/" + e.name;
+                if (FileSystem::exists(fullPath)) {
+                    mtime = FileSystem::getLastModifiedTime(fullPath);
+                    size = FileSystem::getFileSize(fullPath);
+                }
+                index_->stage(e.name, e.hash, mtime, size);
+            }
+            index_->save();
+        } else if (mode == "hard") {
+            index_->clear();
+            for (auto& e : treeEntries) {
+                auto fullPath = workDir_ + "/" + e.name;
+                try {
+                    auto obj = odb_->read(e.hash);
+                    FileSystem::writeFile(fullPath, obj.content);
+                } catch (...) {}
+                auto mtime = FileSystem::getLastModifiedTime(fullPath);
+                auto size = FileSystem::getFileSize(fullPath);
+                index_->stage(e.name, e.hash, mtime, size);
+            }
+            index_->save();
+        }
+
+        auto branch = refs_->getCurrentBranch();
+        if (!branch.empty()) {
+            refs_->setBranchRef(branch, targetHash);
+        } else {
+            refs_->setHead(targetHash);
+        }
+
+        return true;
+    } catch (...) { return false; }
+}
+
+inline bool Repository::rebase(const std::string& targetBranch) {
+    auto headHash = refs_->resolveHead();
+    if (headHash.empty()) return false;
+
+    auto targetHash = refs_->getBranchRef(targetBranch);
+    if (targetHash.empty()) return false;
+
+    if (headHash == targetHash) return true;
+
+    auto headChain = getParentChain(headHash);
+    auto targetChain = getParentChain(targetHash);
+
+    std::string forkPoint;
+    for (auto& h : headChain) {
+        for (auto& t : targetChain) {
+            if (h == t) { forkPoint = h; break; }
+        }
+        if (!forkPoint.empty()) break;
+    }
+
+    std::vector<std::string> toReplay;
+    for (auto& h : headChain) {
+        if (h == forkPoint) break;
+        toReplay.push_back(h);
+    }
+    std::reverse(toReplay.begin(), toReplay.end());
+
+    if (toReplay.empty()) return true;
+
+    if (!reset(targetHash, "hard")) return false;
+
+    for (auto& c : toReplay) {
+        if (!cherryPick(c)) return false;
+    }
+
+    return true;
 }
 
 } // namespace vcs

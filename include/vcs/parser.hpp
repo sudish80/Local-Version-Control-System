@@ -74,6 +74,10 @@ inline std::string Parser::getHelpString(const std::string& command) {
     if (command == "revert")   return "  revert     Revert a commit by applying inverse diff";
     if (command == "gc")       return "  gc         Garbage collect unreachable objects";
     if (command == "blame")    return "  blame      Show commit attribution for each line of a file";
+    if (command == "reset")    return "  reset      Reset HEAD to a specific state (--soft, --mixed, --hard)";
+    if (command == "cherry-pick") return "  cherry-pick Apply changes from an existing commit";
+    if (command == "rebase")   return "  rebase     Reapply commits on top of another branch";
+    if (command == "bisect")   return "  bisect     Binary search for a breaking commit";
     return "";
 }
 
@@ -98,7 +102,11 @@ inline void Parser::printUsage() {
     std::cout << getHelpString("config") << "\n";
     std::cout << getHelpString("revert") << "\n";
     std::cout << getHelpString("gc") << "\n";
+    std::cout << getHelpString("reset") << "\n";
     std::cout << getHelpString("blame") << "\n";
+    std::cout << getHelpString("cherry-pick") << "\n";
+    std::cout << getHelpString("rebase") << "\n";
+    std::cout << getHelpString("bisect") << "\n";
 }
 
 inline void Parser::printHelp(const std::string& command) {
@@ -185,10 +193,31 @@ inline void Parser::printHelp(const std::string& command) {
         std::cout << "vcs gc - Garbage collect unreachable objects\n\n";
         std::cout << "Usage: vcs gc\n\n";
         std::cout << "Removes objects not reachable from any branch, tag, or stash.\n";
+    } else if (command == "reset") {
+        std::cout << "vcs reset - Reset HEAD to a specific state\n\n";
+        std::cout << "Usage: vcs reset [--soft|--mixed|--hard] <commit>\n\n";
+        std::cout << "  --soft    Move HEAD only, index unchanged\n";
+        std::cout << "  --mixed   Move HEAD and reset index (default)\n";
+        std::cout << "  --hard    Move HEAD, reset index, and overwrite working tree\n";
     } else if (command == "blame") {
         std::cout << "vcs blame - Show commit attribution for each line of a file\n\n";
         std::cout << "Usage: vcs blame <file>\n\n";
         std::cout << "Annotates each line with the commit hash that last modified it.\n";
+    } else if (command == "cherry-pick") {
+        std::cout << "vcs cherry-pick - Apply changes from an existing commit\n\n";
+        std::cout << "Usage: vcs cherry-pick <commit>\n\n";
+        std::cout << "Applies the diff of a commit onto the current HEAD.\n";
+    } else if (command == "rebase") {
+        std::cout << "vcs rebase - Reapply commits on top of another branch\n\n";
+        std::cout << "Usage: vcs rebase <branch>\n\n";
+        std::cout << "Finds common ancestor, then replays commits onto the target.\n";
+    } else if (command == "bisect") {
+        std::cout << "vcs bisect - Binary search for a breaking commit\n\n";
+        std::cout << "Usage: vcs bisect start [<bad> [<good>]]\n";
+        std::cout << "       vcs bisect good\n";
+        std::cout << "       vcs bisect bad\n";
+        std::cout << "       vcs bisect reset\n\n";
+        std::cout << "Marks commits and narrows down the first bad commit.\n";
     } else {
         printUsage();
     }
