@@ -1,6 +1,27 @@
+<p align="center">
+  <img src="architecture.svg" alt="Local VCS Architecture" width="100%"/>
+</p>
+
 # Local Version Control System
 
 A lightweight Git-like version control system implemented in C++17 with no external dependencies beyond the standard library and zlib.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/C++-17-00599C?style=for-the-badge&logo=cplusplus&logoColor=white" alt="C++17"/>
+  <img src="https://img.shields.io/badge/zlib-Compressed-2D6A4F?style=for-the-badge&logo=gnu&logoColor=white" alt="zlib"/>
+  <img src="https://img.shields.io/badge/SHA--1-Hashing-E63946?style=for-the-badge&logo=security&logoColor=white" alt="SHA-1"/>
+  <img src="https://img.shields.io/badge/Platform-Cross--Platform-6C757D?style=for-the-badge&logo=windows&logoColor=white" alt="Cross-platform"/>
+</p>
+
+---
+
+## Object Storage Pipeline
+
+<p align="center">
+  <img src="pipeline.svg" alt="Storage Pipeline" width="100%"/>
+</p>
+
+---
 
 ## Features
 

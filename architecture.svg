@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="900" height="500">
+  <rect width="100%" height="100%" fill="white"/>
+  
+  <!-- Title -->
+  <text x="450" y="30" font-size="18" font-family="Arial, Helvetica, sans-serif" text-anchor="middle" font-weight="bold" fill="#1a1a2e">Local VCS — System Architecture</text>
+
+  <!-- CLI Layer -->
+  <rect x="30" y="55" width="840" height="75" rx="10" fill="#dbeafe" stroke="#93c5fd" stroke-width="2"/>
+  <text x="450" y="78" font-size="12" font-family="Arial, sans-serif" text-anchor="middle" font-weight="bold" fill="#1e40af">CLI Layer (main.cpp)</text>
+  
+  <rect x="55" y="88" width="105" height="30" rx="5" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="107" y="107" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Parser</text>
+  
+  <rect x="175" y="88" width="105" height="30" rx="5" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="227" y="107" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">ANSI Output</text>
+  
+  <rect x="295" y="88" width="105" height="30" rx="5" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="347" y="107" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Help/Usage</text>
+  
+  <rect x="415" y="88" width="105" height="30" rx="5" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="467" y="107" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Exit Codes</text>
+  
+  <rect x="535" y="88" width="115" height="30" rx="5" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="592" y="107" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Global Flags</text>
+
+  <!-- Arrow -->
+  <line x1="450" y1="130" x2="450" y2="160" stroke="#94a3b8" stroke-width="2" marker-end="url(#vcsarr)"/>
+
+  <!-- Command Modules -->
+  <rect x="30" y="160" width="840" height="130" rx="10" fill="#ede9fe" stroke="#ddd6fe" stroke-width="2"/>
+  <text x="450" y="183" font-size="13" font-family="Arial, sans-serif" text-anchor="middle" font-weight="bold" fill="#5b21b6">Command Modules</text>
+  
+  <!-- Basic commands -->
+  <rect x="50" y="195" width="140" height="80" rx="8" fill="#8b5cf6" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="120" y="215" font-size="10" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Basic</text>
+  <text x="120" y="232" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">init, add, rm, mv</text>
+  <text x="120" y="245" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">commit, diff, log</text>
+  <text x="120" y="258" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">status, show</text>
+  <text x="120" y="271" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">blame, cherry-pick</text>
+
+  <!-- Branching commands -->
+  <rect x="210" y="195" width="140" height="80" rx="8" fill="#8b5cf6" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="280" y="215" font-size="10" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Branching</text>
+  <text x="280" y="232" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">branch, checkout</text>
+  <text x="280" y="245" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">merge (fast-forward</text>
+  <text x="280" y="258" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">+ 3-way), rebase</text>
+
+  <!-- Maintenance commands -->
+  <rect x="370" y="195" width="150" height="80" rx="8" fill="#8b5cf6" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="445" y="215" font-size="10" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Maintenance</text>
+  <text x="445" y="232" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">clean, reset, stash</text>
+  <text x="445" y="245" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">fsck, gc</text>
+  <text x="445" y="258" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">Workspace mgmt</text>
+
+  <!-- Meta commands -->
+  <rect x="540" y="195" width="150" height="80" rx="8" fill="#8b5cf6" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="615" y="215" font-size="10" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Meta / Undo</text>
+  <text x="615" y="232" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">tag, config, revert</text>
+  <text x="615" y="245" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">bisect, archive</text>
+  <text x="615" y="258" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">format-patch</text>
+
+  <!-- Remote -->
+  <rect x="710" y="195" width="140" height="80" rx="8" fill="#8b5cf6" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="780" y="215" font-size="10" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Remote</text>
+  <text x="780" y="232" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">remote add/push</text>
+  <text x="780" y="245" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">clone, fetch</text>
+  <text x="780" y="258" font-size="7.5" font-family="Arial, sans-serif" text-anchor="middle" fill="#ede9fe">Network ops</text>
+
+  <!-- Arrow -->
+  <line x1="450" y1="290" x2="450" y2="320" stroke="#94a3b8" stroke-width="2" marker-end="url(#vcsarr)"/>
+
+  <!-- Core Library -->
+  <rect x="30" y="320" width="840" height="110" rx="10" fill="#fef3c7" stroke="#fde68a" stroke-width="2"/>
+  <text x="450" y="343" font-size="13" font-family="Arial, sans-serif" text-anchor="middle" font-weight="bold" fill="#92400e">Core Library (include/vcs/)</text>
+  
+  <rect x="50" y="355" width="105" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="102" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Repository</text>
+  <text x="102" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">.vcs/ management</text>
+  <text x="102" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Init, open, status</text>
+  
+  <rect x="165" y="355" width="100" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="215" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Object Store</text>
+  <text x="215" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">SHA-1 hash</text>
+  <text x="215" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Content-addressed</text>
+  
+  <rect x="275" y="355" width="100" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="325" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Compression</text>
+  <text x="325" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">zlib (Z_BEST)</text>
+  <text x="325" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Gzip streams</text>
+  
+  <rect x="385" y="355" width="100" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="435" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Index</text>
+  <text x="435" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Staging area</text>
+  <text x="435" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Binary format</text>
+  
+  <rect x="495" y="355" width="100" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="545" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Refs</text>
+  <text x="545" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Branches, tags</text>
+  <text x="545" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">HEAD pointer</text>
+  
+  <rect x="605" y="355" width="100" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="655" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Diff Engine</text>
+  <text x="655" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">LCS algorithm</text>
+  <text x="655" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Unified output</text>
+  
+  <rect x="715" y="355" width="140" height="60" rx="6" fill="#f59e0b" stroke="#d97706" stroke-width="1.5"/>
+  <text x="785" y="375" font-size="9" font-family="Arial, sans-serif" text-anchor="middle" fill="white" font-weight="bold">Merge Algorithm</text>
+  <text x="785" y="390" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">Fast-forward</text>
+  <text x="785" y="402" font-size="7" font-family="Arial, sans-serif" text-anchor="middle" fill="#fef3c7">3-way merge</text>
+
+  <!-- Arrow -->
+  <line x1="450" y1="430" x2="450" y2="455" stroke="#94a3b8" stroke-width="2" marker-end="url(#vcsarr)"/>
+
+  <!-- Storage Layer -->
+  <rect x="30" y="455" width="840" height="40" rx="8" fill="#d1fae5" stroke="#a7f3d0" stroke-width="2"/>
+  <text x="450" y="480" font-size="12" font-family="Arial, sans-serif" text-anchor="middle" font-weight="bold" fill="#065f46">Filesystem Layer — .vcs/ (content-addressed object store + zlib compressed blobs)</text>
+
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="vcsarr" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>
